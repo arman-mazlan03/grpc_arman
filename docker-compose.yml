@@ -1,0 +1,82 @@
+# version: '3.8'
+
+services:
+  # Service 1: Text Input Service (Entry point)
+  service1:
+    build:
+      context: .
+      dockerfile: service1-input/Dockerfile
+    container_name: grpc-service1
+    ports:
+      - "8051:8051"
+    environment:
+      - PORT=8051
+      - SERVICE2_ADDRESS=service2:8052
+    networks:
+      - grpc-network
+    depends_on:
+      - service2
+
+  # Service 2: Preprocessing Service
+  service2:
+    build:
+      context: .
+      dockerfile: service2-preprocess/Dockerfile
+    container_name: grpc-service2
+    ports:
+      - "8052:8052"
+    environment:
+      - PORT=8052
+      - SERVICE3_ADDRESS=service3:8053
+    networks:
+      - grpc-network
+    depends_on:
+      - service3
+
+  # Service 3: Analysis Service
+  service3:
+    build:
+      context: .
+      dockerfile: service3-analysis/Dockerfile
+    container_name: grpc-service3
+    ports:
+      - "8053:8053"
+    environment:
+      - PORT=8053
+      - SERVICE4_ADDRESS=service4:8054
+    networks:
+      - grpc-network
+    depends_on:
+      - service4
+
+  # Service 4: Report Service (Final service)
+  service4:
+    build:
+      context: .
+      dockerfile: service4-report/Dockerfile
+    container_name: grpc-service4
+    ports:
+      - "8054:8054"
+    environment:
+      - PORT=8054
+    networks:
+      - grpc-network
+
+  # Client: Initiates the pipeline
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: grpc-client
+    networks:
+      - grpc-network
+    depends_on:
+      - service1
+      - service2
+      - service3
+      - service4
+    command: ["sh", "-c", "sleep 5 && python app.py"]
+
+networks:
+  grpc-network:
+    driver: bridge

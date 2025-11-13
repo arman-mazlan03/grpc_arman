@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package pipeline;
+
+// Service 1: Text Input Service
+service TextInputService {
+    rpc ReceiveText(TextRequest) returns (TextResponse);
+}
+
+message TextRequest {
+    string text = 1;
+    string request_id = 2;
+}
+
+message TextResponse {
+    string status = 1;
+    string message = 2;
+    int32 word_count = 3;
+}
+
+// Service 2: Preprocessing Service
+service PreprocessService {
+    rpc CleanText(CleanRequest) returns (CleanResponse);
+}
+
+message CleanRequest {
+    string text = 1;
+    string request_id = 2;
+}
+
+message CleanResponse {
+    string cleaned_text = 1;
+    int32 original_length = 2;
+    int32 cleaned_length = 3;
+}
+
+// Service 3: Analysis Service
+service AnalysisService {
+    rpc AnalyzeText(AnalysisRequest) returns (AnalysisResponse);
+}
+
+message AnalysisRequest {
+    string text = 1;
+    string request_id = 2;
+}
+
+message WordFrequency {
+    string word = 1;
+    int32 count = 2;
+}
+
+message AnalysisResponse {
+    repeated WordFrequency top_words = 1;
+    int32 total_words = 2;
+    int32 unique_words = 3;
+}
+
+// Service 4: Report Service
+service ReportService {
+    rpc GenerateReport(ReportRequest) returns (ReportResponse);
+}
+
+message ReportRequest {
+    string request_id = 1;
+    repeated WordFrequency word_frequencies = 2;
+    int32 total_words = 3;
+    int32 unique_words = 4;
+    int32 original_length = 5;
+    int32 cleaned_length = 6;
+}
+
+message ReportResponse {
+    string report = 1;
+    double processing_time = 2;
+}
