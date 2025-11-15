@@ -10,7 +10,6 @@ sys.path.insert(0, '/app')
 import pipeline_pb2
 import pipeline_pb2_grpc
 
-
 class ReportServiceServicer(pipeline_pb2_grpc.ReportServiceServicer):
     def __init__(self):
         self.instance_id = os.getenv('INSTANCE_ID', 'unknown')
@@ -69,20 +68,25 @@ class ReportServiceServicer(pipeline_pb2_grpc.ReportServiceServicer):
             context.set_details(str(e))
             raise
 
-
 def serve():
     port = os.getenv('PORT', '8054')
     instance_id = os.getenv('INSTANCE_ID', 'default')
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    
+    # ADDED: Server options for larger messages (even though reports are small)
+    server_options = [
+        ('grpc.max_send_message_length', 100 * 1024 * 1024),
+        ('grpc.max_receive_message_length', 100 * 1024 * 1024),
+    ]
+    
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10), options=server_options)
     pipeline_pb2_grpc.add_ReportServiceServicer_to_server(
         ReportServiceServicer(), server
     )
     server.add_insecure_port(f'[::]:{port}')
     server.start()
-    print(f"[Service 4-{instance_id} - Report Service] Started on port {port}")
+    print(f"[Service 4-{instance_id} - Report Service] Started on port {port} (100MB limit)")
     print(f"[Service 4-{instance_id}] Waiting for requests...")
     server.wait_for_termination()
-
 
 if __name__ == '__main__':
     serve()

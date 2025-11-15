@@ -11,7 +11,6 @@ sys.path.insert(0, '/app')
 import pipeline_pb2
 import pipeline_pb2_grpc
 
-
 class PreprocessServiceServicer(pipeline_pb2_grpc.PreprocessServiceServicer):
     def __init__(self):
         self.service3_address = os.getenv('SERVICE3_ADDRESS', 'service3-loadbalancer:8063')
@@ -49,13 +48,19 @@ class PreprocessServiceServicer(pipeline_pb2_grpc.PreprocessServiceServicer):
             # Forward to Service 3 (Analysis)
             print(f"[Service 2-{self.instance_id}] Forwarding to Service 3 (Analysis) at {self.service3_address}")
             
-            with grpc.insecure_channel(self.service3_address) as channel:
+            # ADDED: Larger message options
+            options = [
+                ('grpc.max_send_message_length', 100 * 1024 * 1024),
+                ('grpc.max_receive_message_length', 100 * 1024 * 1024),
+            ]
+            
+            with grpc.insecure_channel(self.service3_address, options=options) as channel:
                 stub = pipeline_pb2_grpc.AnalysisServiceStub(channel)
                 analysis_request = pipeline_pb2.AnalysisRequest(
                     text=cleaned,
                     request_id=request.request_id
                 )
-                analysis_response = stub.AnalyzeText(analysis_request, timeout=30)
+                analysis_response = stub.AnalyzeText(analysis_request, timeout=300)  # Longer timeout
             
             print(f"[Service 2-{self.instance_id}] Received response from Service 3")
             print(f"[Service 2-{self.instance_id}] Total words analyzed: {analysis_response.total_words}")
@@ -81,20 +86,25 @@ class PreprocessServiceServicer(pipeline_pb2_grpc.PreprocessServiceServicer):
             context.set_details(str(e))
             raise
 
-
 def serve():
     port = os.getenv('PORT', '8052')
     instance_id = os.getenv('INSTANCE_ID', 'default')
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    
+    # ADDED: Server options for larger messages
+    server_options = [
+        ('grpc.max_send_message_length', 100 * 1024 * 1024),
+        ('grpc.max_receive_message_length', 100 * 1024 * 1024),
+    ]
+    
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10), options=server_options)
     pipeline_pb2_grpc.add_PreprocessServiceServicer_to_server(
         PreprocessServiceServicer(), server
     )
     server.add_insecure_port(f'[::]:{port}')
     server.start()
-    print(f"[Service 2-{instance_id} - Preprocessing Service] Started on port {port}")
+    print(f"[Service 2-{instance_id} - Preprocessing Service] Started on port {port} (100MB limit)")
     print(f"[Service 2-{instance_id}] Waiting for requests...")
     server.wait_for_termination()
-
 
 if __name__ == '__main__':
     serve()

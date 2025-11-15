@@ -4,12 +4,9 @@ import time
 import os
 import sys
 
-# Add proto directory to path
 sys.path.insert(0, '/app')
-
 import pipeline_pb2
 import pipeline_pb2_grpc
-
 
 class TextInputServiceServicer(pipeline_pb2_grpc.TextInputServiceServicer):
     def __init__(self):
@@ -21,37 +18,38 @@ class TextInputServiceServicer(pipeline_pb2_grpc.TextInputServiceServicer):
         print(f"\n[Service 1-{self.instance_id}] ===== Received Text Request =====")
         print(f"[Service 1-{self.instance_id}] Request ID: {request.request_id}")
         print(f"[Service 1-{self.instance_id}] Text length: {len(request.text)} characters")
-        print(f"[Service 1-{self.instance_id}] Text preview: {request.text[:100]}...")
         print(f"[Service 1-{self.instance_id}] Instance: {self.instance_id}")
         
         start_time = time.time()
         
         try:
-            # Forward to Service 2 (Preprocessing)
             print(f"[Service 1-{self.instance_id}] Forwarding to Service 2 (Preprocessing) at {self.service2_address}")
             
-            with grpc.insecure_channel(self.service2_address) as channel:
+            # ADDED: Larger message options
+            options = [
+                ('grpc.max_send_message_length', 100 * 1024 * 1024),
+                ('grpc.max_receive_message_length', 100 * 1024 * 1024),
+            ]
+            
+            with grpc.insecure_channel(self.service2_address, options=options) as channel:
                 stub = pipeline_pb2_grpc.PreprocessServiceStub(channel)
                 clean_request = pipeline_pb2.CleanRequest(
                     text=request.text,
                     request_id=request.request_id
                 )
-                clean_response = stub.CleanText(clean_request, timeout=30)
+                clean_response = stub.CleanText(clean_request, timeout=300)  # Longer timeout
             
             print(f"[Service 1-{self.instance_id}] Received response from Service 2")
-            print(f"[Service 1-{self.instance_id}] Original length: {clean_response.original_length}")
-            print(f"[Service 1-{self.instance_id}] Cleaned length: {clean_response.cleaned_length}")
             
-            # Count words in cleaned text
             word_count = len(clean_response.cleaned_text.split())
-            
             elapsed_time = time.time() - start_time
+            
             print(f"[Service 1-{self.instance_id}] Total processing time: {elapsed_time:.3f}s")
             print(f"[Service 1-{self.instance_id}] Word count: {word_count}")
             
             return pipeline_pb2.TextResponse(
                 status="success",
-                message=f"Text processed successfully through pipeline in {elapsed_time:.3f}s (Instance: Service1-{self.instance_id})",
+                message=f"Text processed successfully through pipeline in {elapsed_time:.3f}s",
                 word_count=word_count
             )
             
@@ -74,20 +72,23 @@ class TextInputServiceServicer(pipeline_pb2_grpc.TextInputServiceServicer):
                 word_count=0
             )
 
-
 def serve():
     port = os.getenv('PORT', '8051')
     instance_id = os.getenv('INSTANCE_ID', 'default')
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    pipeline_pb2_grpc.add_TextInputServiceServicer_to_server(
-        TextInputServiceServicer(), server
-    )
+    
+    # ADDED: Server options for larger messages
+    server_options = [
+        ('grpc.max_send_message_length', 100 * 1024 * 1024),
+        ('grpc.max_receive_message_length', 100 * 1024 * 1024),
+    ]
+    
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10), options=server_options)
+    pipeline_pb2_grpc.add_TextInputServiceServicer_to_server(TextInputServiceServicer(), server)
     server.add_insecure_port(f'[::]:{port}')
     server.start()
-    print(f"[Service 1-{instance_id} - Text Input Service] Started on port {port}")
+    print(f"[Service 1-{instance_id} - Text Input Service] Started on port {port} (100MB limit)")
     print(f"[Service 1-{instance_id}] Waiting for requests...")
     server.wait_for_termination()
-
 
 if __name__ == '__main__':
     serve()

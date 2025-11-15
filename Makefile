@@ -132,6 +132,10 @@ parallel-test:
 	@echo "Running parallel pipeline test..."
 	docker-compose -f docker-compose-parallel.yml up --abort-on-container-exit parallel-client
 
+parallel-large-test:
+	@echo "Running parallel pipeline test for large files..."
+	docker-compose -f docker-compose-parallel.yml run --rm parallel-client python large_file_client.py
+
 parallel-logs:
 	@echo "Showing parallel services logs..."
 	docker-compose -f docker-compose-parallel.yml logs -f

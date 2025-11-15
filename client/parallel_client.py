@@ -17,37 +17,62 @@ class ParallelPipelineClient:
         self.num_parallel_pipelines = 4  # Can be 2, 4, 8, etc.
         
     def split_text_into_chunks(self, text, num_chunks):
-        """Split text into roughly equal chunks"""
-        words = text.split()
-        chunk_size = len(words) // num_chunks
-        chunks = []
+        """Split text into chunks with optimized handling for large files"""
+        text_length = len(text)
         
-        for i in range(num_chunks):
-            start = i * chunk_size
-            if i == num_chunks - 1:  # Last chunk gets remaining words
-                end = len(words)
-            else:
-                end = (i + 1) * chunk_size
-            chunk_text = ' '.join(words[start:end])
-            chunks.append(chunk_text)
+        # For very large files (>5MB), use character-based splitting
+        if text_length > 5 * 1024 * 1024:
+            print(f"📊 Large file detected: {text_length:,} characters, using optimized chunking...")
+            chunk_size = text_length // num_chunks
+            chunks = []
             
-        print(f"Split text into {num_chunks} chunks:")
+            for i in range(num_chunks):
+                start = i * chunk_size
+                if i == num_chunks - 1:  # Last chunk gets remaining characters
+                    end = text_length
+                else:
+                    end = (i + 1) * chunk_size
+                chunk_text = text[start:end]
+                chunks.append(chunk_text)
+        else:
+            # For smaller files, use word-based splitting (better for analysis)
+            words = text.split()
+            chunk_size = len(words) // num_chunks
+            chunks = []
+            
+            for i in range(num_chunks):
+                start = i * chunk_size
+                if i == num_chunks - 1:
+                    end = len(words)
+                else:
+                    end = (i + 1) * chunk_size
+                chunk_text = ' '.join(words[start:end])
+                chunks.append(chunk_text)
+            
+        print(f"Split {text_length:,} characters into {num_chunks} chunks:")
         for i, chunk in enumerate(chunks):
-            print(f"  Chunk {i+1}: {len(chunk.split())} words, {len(chunk)} chars")
+            word_count = len(chunk.split())
+            print(f"  Chunk {i+1}: {word_count:,} words, {len(chunk):,} chars")
             
         return chunks
     
     def process_single_chunk(self, chunk_text, chunk_id, request_id_base):
-        """Process a single text chunk through the entire pipeline"""
+        """Process a single text chunk through the entire pipeline with large file support"""
         request_id = f"{request_id_base}_chunk{chunk_id}"
         
         print(f"\n[Pipeline {chunk_id}] Starting processing...")
-        print(f"[Pipeline {chunk_id}] Chunk size: {len(chunk_text)} chars, {len(chunk_text.split())} words")
+        print(f"[Pipeline {chunk_id}] Chunk size: {len(chunk_text):,} chars, {len(chunk_text.split()):,} words")
         
         start_time = time.time()
         
         try:
-            with grpc.insecure_channel(self.service1_lb) as channel:
+            # ADDED: Larger message size options and longer timeout
+            options = [
+                ('grpc.max_send_message_length', 100 * 1024 * 1024),      # 100MB send limit
+                ('grpc.max_receive_message_length', 100 * 1024 * 1024),   # 100MB receive limit
+            ]
+            
+            with grpc.insecure_channel(self.service1_lb, options=options) as channel:
                 stub = pipeline_pb2_grpc.TextInputServiceStub(channel)
                 
                 request = pipeline_pb2.TextRequest(
@@ -55,10 +80,11 @@ class ParallelPipelineClient:
                     request_id=request_id
                 )
                 
-                response = stub.ReceiveText(request, timeout=60)
+                # ADDED: Longer timeout for large files (5 minutes)
+                response = stub.ReceiveText(request, timeout=300)
                 
                 elapsed_time = time.time() - start_time
-                print(f"[Pipeline {chunk_id}] ✓ Completed in {elapsed_time:.3f}s - {response.word_count} words")
+                print(f"[Pipeline {chunk_id}] ✓ Completed in {elapsed_time:.3f}s - {response.word_count:,} words")
                 
                 return {
                     'chunk_id': chunk_id,
@@ -69,6 +95,17 @@ class ParallelPipelineClient:
                     'message': response.message
                 }
                 
+        except grpc.RpcError as e:
+            elapsed_time = time.time() - start_time
+            error_msg = f"gRPC Error: {e.code().name} - {e.details()}"
+            print(f"[Pipeline {chunk_id}] ✗ Failed in {elapsed_time:.3f}s: {error_msg}")
+            
+            return {
+                'chunk_id': chunk_id,
+                'success': False,
+                'error': error_msg,
+                'processing_time': elapsed_time
+            }
         except Exception as e:
             elapsed_time = time.time() - start_time
             print(f"[Pipeline {chunk_id}] ✗ Failed in {elapsed_time:.3f}s: {str(e)}")
@@ -88,9 +125,11 @@ class ParallelPipelineClient:
         print("\n" + "="*80)
         print("🚀 PARALLEL PIPELINE PROCESSING")
         print("="*80)
-        print(f"Total text length: {len(text)} characters")
+        print(f"Total text length: {len(text):,} characters")
         print(f"Number of parallel pipelines: {num_parallel}")
         print(f"Service instances: 4x each service type")
+        print(f"Message size limit: 100MB per chunk")
+        print(f"Timeout: 300 seconds")
         
         # Split text into chunks
         chunks = self.split_text_into_chunks(text, num_parallel)
@@ -142,18 +181,21 @@ class ParallelPipelineClient:
         print(f"Total processing time: {total_time:.3f}s")
         print(f"Successful pipelines: {len(successful)}/{len(results)}")
         print(f"Failed pipelines: {len(failed)}/{len(results)}")
-        print(f"Total words processed: {total_words}")
+        print(f"Total words processed: {total_words:,}")
         print(f"Average pipeline time: {avg_time:.3f}s")
         
-        if successful:
-            speedup = avg_time * len(results) / total_time if total_time > 0 else 1
+        speedup = 0
+    
+        if successful and len(successful) > 1:
+            speedup = (avg_time * len(results)) / total_time if total_time > 0 else 1
             print(f"Parallel speedup: {speedup:.2f}x")
         
         print("\nPipeline Details:")
         for result in sorted(results, key=lambda x: x['chunk_id']):
             status = "✓" if result['success'] else "✗"
             words = result.get('word_count', 0) if result['success'] else "N/A"
-            print(f"  Pipeline {result['chunk_id']}: {status} {result['processing_time']:.3f}s, {words} words")
+            time_taken = result['processing_time']
+            print(f"  Pipeline {result['chunk_id']}: {status} {time_taken:.3f}s, {words:,} words")
         
         if failed:
             print(f"\nFailures:")
@@ -165,13 +207,13 @@ class ParallelPipelineClient:
             'successful_count': len(successful),
             'failed_count': len(failed),
             'total_words': total_words,
-            'speedup': speedup if successful else 0,
+            'speedup': speedup,
             'pipeline_results': results
         }
 
 
 def read_text_files(datasets_path='/app/datasets'):
-    """Read all .txt files from datasets directory"""
+    """Read all .txt files from datasets directory with better error handling"""
     text_files = []
     
     if not os.path.exists(datasets_path):
@@ -189,6 +231,7 @@ def read_text_files(datasets_path='/app/datasets'):
     
     for file_path in txt_files:
         try:
+            file_size = os.path.getsize(file_path)
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
                 filename = os.path.basename(file_path)
@@ -197,12 +240,16 @@ def read_text_files(datasets_path='/app/datasets'):
                     text_files.append({
                         'filename': filename,
                         'content': content,
-                        'file_path': file_path
+                        'file_path': file_path,
+                        'file_size': file_size
                     })
-                    print(f"  - {filename} ({len(content)} characters, {len(content.split())} words)")
+                    word_count = len(content.split())
+                    print(f"  - {filename} ({file_size:,} bytes, {len(content):,} chars, {word_count:,} words)")
                 else:
                     print(f"  - {filename} (EMPTY - skipping)")
                     
+        except UnicodeDecodeError:
+            print(f"  - {os.path.basename(file_path)} (ENCODING ERROR - not UTF-8)")
         except Exception as e:
             print(f"  - ERROR reading {os.path.basename(file_path)}: {str(e)}")
     
@@ -220,6 +267,8 @@ def main():
     print("• Parallel processing of text chunks")  
     print("• Load balancing across service instances")
     print("• Horizontal scaling performance")
+    print("• Large file support (up to 100MB per chunk)")
+    print("• Optimized chunking for different file sizes")
     print("="*80)
     
     # Read text files
@@ -256,7 +305,7 @@ def main():
         instruction-level, data, and task parallelism. Parallelism has been employed for many years, 
         mainly in high-performance computing, but interest in it has grown lately due to the physical 
         constraints preventing frequency scaling.
-        """ * 10  # Make it larger for better demonstration
+        """ * 20  # Make it larger for better demonstration
         
         text_files = [{'filename': 'sample_distributed_systems.txt', 'content': sample_text}]
     
@@ -264,6 +313,8 @@ def main():
     for file_info in text_files:
         print(f"\n\n{'#'*80}")
         print(f"📄 PROCESSING: {file_info['filename']}")
+        if 'file_size' in file_info:
+            print(f"📊 FILE SIZE: {file_info['file_size']:,} bytes")
         print(f"{'#'*80}")
         
         # Test different parallelism levels

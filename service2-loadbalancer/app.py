@@ -10,7 +10,6 @@ import pipeline_pb2_grpc
 
 class Service2LoadBalancerServicer(pipeline_pb2_grpc.PreprocessServiceServicer):
     def __init__(self):
-        # List of Service 2 instances
         self.service2_instances = [
             'service2a:8052',
             'service2b:8056', 
@@ -24,21 +23,28 @@ class Service2LoadBalancerServicer(pipeline_pb2_grpc.PreprocessServiceServicer):
             print(f"  - {instance}")
 
     def CleanText(self, request, context):
-        # Round-robin load balancing
         start_index = self.current_index
         attempts = 0
+        
+        request_size = len(request.text)
+        print(f"[Load Balancer 2] Routing request {request.request_id} ({request_size} chars)")
         
         while attempts < len(self.service2_instances):
             instance = self.service2_instances[self.current_index]
             self.current_index = (self.current_index + 1) % len(self.service2_instances)
             
-            print(f"[Load Balancer 2] Routing request {request.request_id} to {instance}")
+            print(f"[Load Balancer 2] → Sending to {instance}")
             self.instance_stats[instance]['requests'] += 1
             
             try:
-                with grpc.insecure_channel(instance) as channel:
+                options = [
+                    ('grpc.max_send_message_length', 100 * 1024 * 1024),
+                    ('grpc.max_receive_message_length', 100 * 1024 * 1024),
+                ]
+                
+                with grpc.insecure_channel(instance, options=options) as channel:
                     stub = pipeline_pb2_grpc.PreprocessServiceStub(channel)
-                    response = stub.CleanText(request, timeout=60)
+                    response = stub.CleanText(request, timeout=300)
                     print(f"[Load Balancer 2] ✓ Success from {instance}")
                     return response
                     
@@ -53,7 +59,6 @@ class Service2LoadBalancerServicer(pipeline_pb2_grpc.PreprocessServiceServicer):
                 attempts += 1
                 continue
         
-        # All instances failed
         error_msg = f"All Service 2 instances failed after {attempts} attempts"
         print(f"[Load Balancer 2] 💥 {error_msg}")
         context.set_code(grpc.StatusCode.UNAVAILABLE)
@@ -62,14 +67,17 @@ class Service2LoadBalancerServicer(pipeline_pb2_grpc.PreprocessServiceServicer):
 
 def serve():
     port = os.getenv('PORT', '8062')
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=20))
-    pipeline_pb2_grpc.add_PreprocessServiceServicer_to_server(
-        Service2LoadBalancerServicer(), server
-    )
+    
+    server_options = [
+        ('grpc.max_send_message_length', 100 * 1024 * 1024),
+        ('grpc.max_receive_message_length', 100 * 1024 * 1024),
+    ]
+    
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=20), options=server_options)
+    pipeline_pb2_grpc.add_PreprocessServiceServicer_to_server(Service2LoadBalancerServicer(), server)
     server.add_insecure_port(f'[::]:{port}')
     server.start()
-    print(f"[Service 2 Load Balancer] Started on port {port}")
-    print(f"[Service 2 Load Balancer] Ready to distribute traffic to Service 2 instances")
+    print(f"[Service 2 Load Balancer] Started on port {port} (100MB limit)")
     server.wait_for_termination()
 
 if __name__ == '__main__':
