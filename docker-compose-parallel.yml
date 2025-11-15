@@ -1,0 +1,319 @@
+# version: '3.8'
+
+services:
+  # ==================== SERVICE 1 INSTANCES (4 instances) ====================
+  service1a:
+    build:
+      context: .
+      dockerfile: service1-input/Dockerfile
+    container_name: grpc-service1a
+    ports:
+      - "8051:8051"
+    environment:
+      - PORT=8051
+      - INSTANCE_ID=a
+      - SERVICE2_ADDRESS=service2-loadbalancer:8062
+    networks:
+      - grpc-network
+
+  service1b:
+    build:
+      context: .
+      dockerfile: service1-input/Dockerfile  
+    container_name: grpc-service1b
+    ports:
+      - "8055:8055"
+    environment:
+      - PORT=8055
+      - INSTANCE_ID=b
+      - SERVICE2_ADDRESS=service2-loadbalancer:8062
+    networks:
+      - grpc-network
+
+  service1c:
+    build:
+      context: .
+      dockerfile: service1-input/Dockerfile
+    container_name: grpc-service1c
+    ports:
+      - "8057:8057"
+    environment:
+      - PORT=8057
+      - INSTANCE_ID=c
+      - SERVICE2_ADDRESS=service2-loadbalancer:8062
+    networks:
+      - grpc-network
+
+  service1d:
+    build:
+      context: .
+      dockerfile: service1-input/Dockerfile
+    container_name: grpc-service1d
+    ports:
+      - "8059:8059"
+    environment:
+      - PORT=8059
+      - INSTANCE_ID=d
+      - SERVICE2_ADDRESS=service2-loadbalancer:8062
+    networks:
+      - grpc-network
+
+  # Service 1 Load Balancer
+  service1-loadbalancer:
+    build:
+      context: .
+      dockerfile: service1-loadbalancer/Dockerfile
+    container_name: grpc-service1-lb
+    ports:
+      - "8061:8061"
+    environment:
+      - PORT=8061
+    networks:
+      - grpc-network
+    depends_on:
+      - service1a
+      - service1b
+      - service1c
+      - service1d
+
+  # ==================== SERVICE 2 INSTANCES (4 instances) ====================
+  service2a:
+    build:
+      context: .
+      dockerfile: service2-preprocess/Dockerfile
+    container_name: grpc-service2a
+    ports:
+      - "8052:8052"
+    environment:
+      - PORT=8052
+      - INSTANCE_ID=a
+      - SERVICE3_ADDRESS=service3-loadbalancer:8063
+    networks:
+      - grpc-network
+
+  service2b:
+    build:
+      context: .
+      dockerfile: service2-preprocess/Dockerfile
+    container_name: grpc-service2b  
+    ports:
+      - "8056:8056"
+    environment:
+      - PORT=8056
+      - INSTANCE_ID=b
+      - SERVICE3_ADDRESS=service3-loadbalancer:8063
+    networks:
+      - grpc-network
+
+  service2c:
+    build:
+      context: .
+      dockerfile: service2-preprocess/Dockerfile
+    container_name: grpc-service2c
+    ports:
+      - "8058:8058"
+    environment:
+      - PORT=8058
+      - INSTANCE_ID=c
+      - SERVICE3_ADDRESS=service3-loadbalancer:8063
+    networks:
+      - grpc-network
+
+  service2d:
+    build:
+      context: .
+      dockerfile: service2-preprocess/Dockerfile
+    container_name: grpc-service2d
+    ports:
+      - "8060:8060"
+    environment:
+      - PORT=8060
+      - INSTANCE_ID=d
+      - SERVICE3_ADDRESS=service3-loadbalancer:8063
+    networks:
+      - grpc-network
+
+  # Service 2 Load Balancer
+  service2-loadbalancer:
+    build:
+      context: .
+      dockerfile: service2-loadbalancer/Dockerfile
+    container_name: grpc-service2-lb
+    ports:
+      - "8062:8062"
+    environment:
+      - PORT=8062
+    networks:
+      - grpc-network
+    depends_on:
+      - service2a
+      - service2b
+      - service2c
+      - service2d
+
+  # ==================== SERVICE 3 INSTANCES (4 instances) ====================
+  service3a:
+    build:
+      context: .
+      dockerfile: service3-analysis/Dockerfile
+    container_name: grpc-service3a
+    ports:
+      - "8053:8053"
+    environment:
+      - PORT=8053
+      - INSTANCE_ID=a
+      - SERVICE4_ADDRESS=service4-loadbalancer:8064
+    networks:
+      - grpc-network
+
+  service3b:
+    build:
+      context: .
+      dockerfile: service3-analysis/Dockerfile
+    container_name: grpc-service3b
+    ports:
+      - "8065:8065"
+    environment:
+      - PORT=8065
+      - INSTANCE_ID=b
+      - SERVICE4_ADDRESS=service4-loadbalancer:8064
+    networks:
+      - grpc-network
+
+  service3c:
+    build:
+      context: .
+      dockerfile: service3-analysis/Dockerfile
+    container_name: grpc-service3c
+    ports:
+      - "8067:8067"
+    environment:
+      - PORT=8067
+      - INSTANCE_ID=c
+      - SERVICE4_ADDRESS=service4-loadbalancer:8064
+    networks:
+      - grpc-network
+
+  service3d:
+    build:
+      context: .
+      dockerfile: service3-analysis/Dockerfile
+    container_name: grpc-service3d
+    ports:
+      - "8069:8069"
+    environment:
+      - PORT=8069
+      - INSTANCE_ID=d
+      - SERVICE4_ADDRESS=service4-loadbalancer:8064
+    networks:
+      - grpc-network
+
+  # Service 3 Load Balancer
+  service3-loadbalancer:
+    build:
+      context: .
+      dockerfile: service3-loadbalancer/Dockerfile
+    container_name: grpc-service3-lb
+    ports:
+      - "8063:8063"
+    environment:
+      - PORT=8063
+    networks:
+      - grpc-network
+    depends_on:
+      - service3a
+      - service3b
+      - service3c
+      - service3d
+
+  # ==================== SERVICE 4 INSTANCES (4 instances) ====================
+  service4a:
+    build:
+      context: .
+      dockerfile: service4-report/Dockerfile
+    container_name: grpc-service4a
+    ports:
+      - "8054:8054"
+    environment:
+      - PORT=8054
+      - INSTANCE_ID=a
+    networks:
+      - grpc-network
+
+  service4b:
+    build:
+      context: .
+      dockerfile: service4-report/Dockerfile
+    container_name: grpc-service4b
+    ports:
+      - "8066:8066"
+    environment:
+      - PORT=8066
+      - INSTANCE_ID=b
+    networks:
+      - grpc-network
+
+  service4c:
+    build:
+      context: .
+      dockerfile: service4-report/Dockerfile
+    container_name: grpc-service4c
+    ports:
+      - "8068:8068"
+    environment:
+      - PORT=8068
+      - INSTANCE_ID=c
+    networks:
+      - grpc-network
+
+  service4d:
+    build:
+      context: .
+      dockerfile: service4-report/Dockerfile
+    container_name: grpc-service4d
+    ports:
+      - "8070:8070"
+    environment:
+      - PORT=8070
+      - INSTANCE_ID=d
+    networks:
+      - grpc-network
+
+  # Service 4 Load Balancer
+  service4-loadbalancer:
+    build:
+      context: .
+      dockerfile: service4-loadbalancer/Dockerfile
+    container_name: grpc-service4-lb
+    ports:
+      - "8064:8064"
+    environment:
+      - PORT=8064
+    networks:
+      - grpc-network
+    depends_on:
+      - service4a
+      - service4b
+      - service4c
+      - service4d
+
+  # ==================== PARALLEL CLIENT ====================
+  parallel-client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: grpc-parallel-client
+    networks:
+      - grpc-network
+    depends_on:
+      - service1-loadbalancer
+      - service2-loadbalancer
+      - service3-loadbalancer
+      - service4-loadbalancer
+    volumes:
+      - ./datasets:/app/datasets
+    command: ["sh", "-c", "sleep 15 && python parallel_client.py"]
+
+networks:
+  grpc-network:
+    driver: bridge

@@ -15,10 +15,11 @@ RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. pipeline.
 # Copy service code
 COPY service3-analysis/app.py .
 
+# Enable unbuffered logging and set instance ID
+ENV PYTHONUNBUFFERED=1
+ENV INSTANCE_ID=default
+
 # Expose port
 EXPOSE 8053
-
-# Add this line for unbuffered output
-ENV PYTHONUNBUFFERED=1
 
 CMD ["python", "app.py"]

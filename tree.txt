@@ -1,0 +1,51 @@
+┣ 📂client
+┃ ┣ 📜app.py
+┃ ┣ 📜benchmark.py
+┃ ┣ 📜Dockerfile
+┃ ┣ 📜parallel_client.py
+┃ ┗ 📜requirements.txt
+┣ 📂datasets
+┃ ┗ 📜sample.txt
+┣ 📂proto
+┃ ┗ 📜pipeline.proto
+┣ 📂service1-input
+┃ ┣ 📜app.py
+┃ ┣ 📜Dockerfile
+┃ ┗ 📜requirements.txt
+┣ 📂service1-loadbalancer
+┃ ┣ 📜app.py
+┃ ┣ 📜Dockerfile
+┃ ┗ 📜requirements.txt
+┣ 📂service2-loadbalancer
+┃ ┣ 📜app.py
+┃ ┣ 📜Dockerfile
+┃ ┗ 📜requirements.txt
+┣ 📂service2-preprocess
+┃ ┣ 📜app.py
+┃ ┣ 📜Dockerfile
+┃ ┗ 📜requirements.txt
+┣ 📂service3-analysis
+┃ ┣ 📜app.py
+┃ ┣ 📜Dockerfile
+┃ ┗ 📜requirements.txt
+┣ 📂service3-loadbalancer
+┃ ┣ 📜app.py
+┃ ┣ 📜Dockerfile
+┃ ┗ 📜requirements.txt
+┣ 📂service4-loadbalencer
+┃ ┣ 📜app.py
+┃ ┣ 📜Dockerfile
+┃ ┗ 📜requirements.txt
+┣ 📂service4-report
+┃ ┣ 📜app.py
+┃ ┣ 📜Dockerfile
+┃ ┗ 📜requirements.txt
+┣ 📜ARCHITECTURE.md
+┣ 📜docker-compose-parallel.yml
+┣ 📜docker-compose.yml
+┣ 📜Makefile
+┣ 📜PROJECT_SUMMARY.md
+┣ 📜QUICKSTART.md
+┣ 📜README.md
+┣ 📜START_HERE.md
+┗ 📜verify-setup.sh
