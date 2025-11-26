@@ -78,8 +78,8 @@ large-test:
 	docker-compose -f docker-compose-parallel.yml run --rm parallel-client python large_file_client.py
 
 benchmark:
-	@echo "🧪 Running benchmark test..."	
-	docker-compose -f docker-compose-parallel.yml run --rm parallel-client python benchmark.py 20 4
+	@echo "🧪 Running comprehensive pipeline benchmark..."
+	docker-compose -f docker-compose-parallel.yml run --rm parallel-client python benchmark.py
 
 logs:
 	@echo "📋 Showing all parallel services logs..."

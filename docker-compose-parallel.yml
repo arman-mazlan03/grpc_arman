@@ -65,7 +65,7 @@ services:
       dockerfile: service1-loadbalancer/Dockerfile
     container_name: grpc-service1-lb
     ports:
-      - "8061:8061"
+      - "18061:8061"
     environment:
       - PORT=8061
     networks:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enhanced Benchmark that uses dataset files
+Enhanced Benchmark that tests different pipeline configurations
 """
 
 import grpc
@@ -75,11 +75,75 @@ def run_single_test(text, service1_address='service1-loadbalancer:8061'):
         print(f"Error: {str(e)}")
         return elapsed_time, False, 0
 
-def run_dataset_benchmark(num_iterations=10, num_parallel=4):
-    """Run benchmark using actual dataset files"""
+def run_parallel_test(text, num_parallel, service1_address='service1-loadbalancer:8061'):
+    """Run parallel pipeline test with chunking"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    def split_text_into_chunks(text, num_chunks):
+        """Split text into chunks"""
+        text_length = len(text)
+        chunk_size = text_length // num_chunks
+        chunks = []
+        
+        for i in range(num_chunks):
+            start = i * chunk_size
+            if i == num_chunks - 1:
+                end = text_length
+            else:
+                end = (i + 1) * chunk_size
+            chunks.append(text[start:end])
+        
+        return chunks
+    
+    chunks = split_text_into_chunks(text, num_parallel)
+    request_id_base = str(uuid.uuid4())[:8]
+    
+    overall_start = time.time()
+    results = []
+    
+    with ThreadPoolExecutor(max_workers=num_parallel) as executor:
+        future_to_chunk = {
+            executor.submit(run_single_test, chunk, service1_address): i 
+            for i, chunk in enumerate(chunks)
+        }
+        
+        for future in as_completed(future_to_chunk):
+            chunk_id = future_to_chunk[future]
+            try:
+                elapsed, success, word_count = future.result()
+                results.append({
+                    'chunk_id': chunk_id,
+                    'success': success,
+                    'processing_time': elapsed,
+                    'word_count': word_count
+                })
+            except Exception as e:
+                print(f"Chunk {chunk_id} generated exception: {e}")
+                results.append({
+                    'chunk_id': chunk_id,
+                    'success': False,
+                    'processing_time': 0,
+                    'word_count': 0
+                })
+    
+    overall_time = time.time() - overall_start
+    
+    # Calculate results
+    successful = [r for r in results if r['success']]
+    total_words = sum(r['word_count'] for r in successful)
+    
+    return {
+        'total_time': overall_time,
+        'successful_count': len(successful),
+        'total_words': total_words,
+        'pipeline_results': results
+    }
+
+def run_comprehensive_benchmark():
+    """Run comprehensive benchmark testing different pipeline configurations"""
     
     print("\n" + "=" * 80)
-    print("🚀 DATASET-BASED BENCHMARK")
+    print("🚀 COMPREHENSIVE PIPELINE BENCHMARK")
     print("=" * 80)
     
     # Load dataset files
@@ -87,8 +151,7 @@ def run_dataset_benchmark(num_iterations=10, num_parallel=4):
     
     if not dataset_files:
         print("Using fallback text (no dataset files found)")
-        # Fallback to original text
-        test_text = "Docker is a platform... " * 100
+        test_text = "Docker is a platform for developing, shipping, and running applications in containers. " * 500
         file_info = {'filename': 'fallback.txt', 'content': test_text, 'file_size': len(test_text)}
     else:
         # Use the first dataset file
@@ -98,90 +161,115 @@ def run_dataset_benchmark(num_iterations=10, num_parallel=4):
     
     print(f"📄 Using: {file_info['filename']}")
     print(f"📊 File size: {file_info['file_size']:,} characters")
-    print(f"🔢 Iterations: {num_iterations}")
-    print(f"⚡ Parallel: {num_parallel} requests")
+    print(f"🔢 Testing pipelines: 1, 2, and 4 parallel pipelines")
+    print(f"🔄 Runs per configuration: 3")
     print("=" * 80)
     
-    # Warm-up
-    print("\n🔥 Warm-up run...")
-    run_single_test(test_text[:1000])  # Small sample for warm-up
-    time.sleep(2)
+    # Test configurations
+    pipeline_configs = [1, 2, 4]
+    num_runs = 3
     
-    # Benchmark
-    print(f"\n🔄 Running benchmark...")
-    all_times = []
-    all_successes = 0
+    # Store results
+    all_results = {}
     
-    batch_size = num_parallel
-    batches = (num_iterations + batch_size - 1) // batch_size
-    
-    for batch in range(batches):
-        batch_start = batch * batch_size
-        batch_end = min((batch + 1) * batch_size, num_iterations)
-        batch_iterations = batch_end - batch_start
+    for num_pipelines in pipeline_configs:
+        print(f"\n\n{'#'*60}")
+        print(f"🧪 TESTING {num_pipelines} PARALLEL PIPELINE(S)")
+        print(f"{'#'*60}")
         
-        print(f"\n📦 Batch {batch+1}/{batches} ({batch_iterations} parallel):")
+        config_times = []
+        config_successes = []
         
-        batch_times = []
-        batch_successes = 0
-        
-        with ThreadPoolExecutor(max_workers=num_parallel) as executor:
-            future_to_iteration = {
-                executor.submit(run_single_test, test_text): i 
-                for i in range(batch_start, batch_end)
-            }
+        for run in range(num_runs):
+            print(f"\n--- Run {run+1}/{num_runs} ---")
             
-            for future in as_completed(future_to_iteration):
-                iteration = future_to_iteration[future]
-                try:
-                    elapsed, success, word_count = future.result()
-                    batch_times.append(elapsed)
-                    
-                    if success:
-                        batch_successes += 1
-                        print(f"  Iteration {iteration+1}: ✓ {elapsed:.3f}s ({word_count} words)")
-                    else:
-                        print(f"  Iteration {iteration+1}: ✗ {elapsed:.3f}s (failed)")
-                        
-                except Exception as e:
-                    print(f"  Iteration {iteration+1}: ✗ Exception: {str(e)}")
-                    batch_times.append(0)
+            if num_pipelines == 1:
+                # Single pipeline test
+                start_time = time.time()
+                elapsed, success, word_count = run_single_test(test_text)
+                total_time = time.time() - start_time
+                result = {
+                    'total_time': elapsed,
+                    'successful_count': 1 if success else 0,
+                    'total_words': word_count if success else 0
+                }
+            else:
+                # Parallel pipeline test
+                result = run_parallel_test(test_text, num_pipelines)
+            
+            config_times.append(result['total_time'])
+            config_successes.append(result['successful_count'])
+            
+            print(f"  Time: {result['total_time']:.3f}s")
+            print(f"  Success: {result['successful_count']}/{num_pipelines}")
+            print(f"  Words processed: {result['total_words']:,}")
+            
+            # Wait between runs
+            if run < num_runs - 1:
+                print("  Waiting 2 seconds...")
+                time.sleep(2)
         
-        all_times.extend(batch_times)
-        all_successes += batch_successes
-        
-        if batch < batches - 1:
-            print("⏳ Waiting 2 seconds...")
-            time.sleep(2)
+        # Store configuration results
+        all_results[num_pipelines] = {
+            'times': config_times,
+            'successes': config_successes,
+            'avg_time': statistics.mean(config_times),
+            'best_time': min(config_times),
+            'worst_time': max(config_times),
+            'success_rate': sum(config_successes) / (num_pipelines * num_runs) * 100
+        }
     
-    # Results
-    successful_times = [t for t in all_times if t > 0]
-    
+    # Print comprehensive results
     print("\n" + "=" * 80)
-    print("📊 DATASET BENCHMARK RESULTS")
+    print("📊 COMPREHENSIVE BENCHMARK RESULTS")
     print("=" * 80)
-    print(f"File: {file_info['filename']}")
-    print(f"Success rate: {all_successes}/{num_iterations} ({(all_successes/num_iterations)*100:.1f}%)")
+    print(f"File: {file_info['filename']} ({file_info['file_size']:,} chars)")
+    print(f"Configuration: {num_runs} runs per pipeline type")
+    print("=" * 80)
     
-    if successful_times:
-        print(f"\n⏱️  Performance:")
-        print(f"  Average time: {statistics.mean(successful_times):.3f}s")
-        print(f"  Throughput: {len(successful_times)/sum(successful_times):.2f} req/sec")
-        print(f"  Best: {min(successful_times):.3f}s, Worst: {max(successful_times):.3f}s")
+    # Print comparison table
+    print("\n🏆 PERFORMANCE COMPARISON:")
+    print("┌────────────┬────────────┬────────────┬────────────┬────────────┬────────────┐")
+    print("│ Pipelines  │  Avg Time  │  Best Time │ Worst Time │ Success %  │ Speedup    │")
+    print("├────────────┼────────────┼────────────┼────────────┼────────────┼────────────┤")
+    
+    base_time = all_results[1]['avg_time']
+    
+    for num_pipelines in pipeline_configs:
+        results = all_results[num_pipelines]
+        speedup = base_time / results['avg_time'] if results['avg_time'] > 0 else 1
+        
+        print(f"│     {num_pipelines}      │  {results['avg_time']:7.3f}s  │  {results['best_time']:7.3f}s  │  {results['worst_time']:7.3f}s  │  {results['success_rate']:6.1f}%   │    {speedup:5.2f}x  │")
+    
+    print("└────────────┴────────────┴────────────┴────────────┴────────────┴────────────┘")
+    
+    # Print detailed results
+    print(f"\n📈 DETAILED RESULTS:")
+    for num_pipelines in pipeline_configs:
+        results = all_results[num_pipelines]
+        print(f"\n  {num_pipelines} Pipeline(s):")
+        print(f"    • Average time: {results['avg_time']:.3f}s")
+        print(f"    • Best time: {results['best_time']:.3f}s")
+        print(f"    • Worst time: {results['worst_time']:.3f}s")
+        print(f"    • Success rate: {results['success_rate']:.1f}%")
+        print(f"    • Individual times: {[f'{t:.3f}s' for t in results['times']]}")
+    
+    # Performance analysis
+    print(f"\n💡 PERFORMANCE ANALYSIS:")
+    single_avg = all_results[1]['avg_time']
+    double_avg = all_results[2]['avg_time']
+    quad_avg = all_results[4]['avg_time']
+    
+    print(f"  • 2 pipelines vs 1: {single_avg/double_avg:.2f}x faster")
+    print(f"  • 4 pipelines vs 1: {single_avg/quad_avg:.2f}x faster") 
+    print(f"  • 4 pipelines vs 2: {double_avg/quad_avg:.2f}x faster")
     
     print("=" * 80)
-    return successful_times
+    
+    return all_results
 
 if __name__ == '__main__':
-    num_iterations = 10
-    num_parallel = 4
-    
-    if len(sys.argv) > 1:
-        num_iterations = int(sys.argv[1])
-    if len(sys.argv) > 2:
-        num_parallel = int(sys.argv[2])
-    
-    print("⏳ Waiting for services...")
+    print("⏳ Waiting for services to be ready...")
     time.sleep(10)
     
-    run_dataset_benchmark(num_iterations, num_parallel)
+    run_comprehensive_benchmark()
