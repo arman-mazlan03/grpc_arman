@@ -167,7 +167,7 @@ def run_comprehensive_benchmark():
     
     # Test configurations
     pipeline_configs = [1, 2, 4]
-    num_runs = 3
+    num_runs = 10
     
     # Store results
     all_results = {}
@@ -228,7 +228,7 @@ def run_comprehensive_benchmark():
     print("=" * 80)
     
     # Print comparison table
-    print("\n🏆 PERFORMANCE COMPARISON:")
+    print("\n🏆 GRPC PERFORMANCE COMPARISON:")
     print("┌────────────┬────────────┬────────────┬────────────┬────────────┬────────────┐")
     print("│ Pipelines  │  Avg Time  │  Best Time │ Worst Time │ Success %  │ Speedup    │")
     print("├────────────┼────────────┼────────────┼────────────┼────────────┼────────────┤")
